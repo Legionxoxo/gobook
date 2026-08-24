@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package pricing.v1;
+
+option go_package = "github.com/Legionxoxo/gobook/gen/pricing/v1;pricingv1";
+
+service PricingService {
+  rpc GetQuote(GetQuoteRequest) returns (GetQuoteResponse);
+}
+
+message GetQuoteRequest {
+  string movie_id = 1;
+  string seat_id = 2;
+}
+
+message GetQuoteResponse {
+  int64 price_paise = 1;
+  string currency = 2;
+}
