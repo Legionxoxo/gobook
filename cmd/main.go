@@ -4,9 +4,13 @@ import (
 	"log"
 	"net/http"
 
+	pricingv1 "github.com/Legionxoxo/gobook/gen/pricing/v1"
+	pricingadapter "github.com/Legionxoxo/gobook/internal/adapters/pricing"
 	"github.com/Legionxoxo/gobook/internal/adapters/redis"
 	"github.com/Legionxoxo/gobook/internal/booking"
 	"github.com/Legionxoxo/gobook/internal/utils"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -18,8 +22,14 @@ func main() {
 
 	store := booking.NewRedisStore(redis.NewClient("localhost:6379"))
 	svc := booking.NewService(store)
+	pricingConn, err := grpc.NewClient("localhost:9090", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer pricingConn.Close()
 
-	bookingHandler := booking.NewHandler(svc)
+	priceClient := pricingadapter.NewClient(pricingv1.NewPricingServiceClient(pricingConn))
+	bookingHandler := booking.NewHandler(svc, priceClient)
 
 	mux.HandleFunc("GET /movies/{movieID}/seats", bookingHandler.ListSeats)
 	mux.HandleFunc("POST /movies/{movieID}/seats/{seatID}/hold", bookingHandler.HoldSeat)

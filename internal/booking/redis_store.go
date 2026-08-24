@@ -86,12 +86,14 @@ func (s *RedisStore) hold(b Booking) (Booking, error) {
 	s.rdb.Set(ctx, sessionKey(id), key, defaultHoldTTL)
 
 	return Booking{
-		ID:        id,
-		MovieID:   b.MovieID,
-		SeatID:    b.SeatID,
-		UserID:    b.UserID,
-		Status:    "held",
-		ExpiresAt: now.Add(defaultHoldTTL),
+		ID:         id,
+		MovieID:    b.MovieID,
+		SeatID:     b.SeatID,
+		UserID:     b.UserID,
+		Status:     "held",
+		PricePaise: b.PricePaise,
+		Currency:   b.Currency,
+		ExpiresAt:  now.Add(defaultHoldTTL),
 	}, nil
 }
 
@@ -101,11 +103,13 @@ func parseSession(val string) (Booking, error) {
 		return Booking{}, err
 	}
 	return Booking{
-		ID:      data.ID,
-		MovieID: data.MovieID,
-		SeatID:  data.SeatID,
-		UserID:  data.UserID,
-		Status:  data.Status,
+		ID:         data.ID,
+		MovieID:    data.MovieID,
+		SeatID:     data.SeatID,
+		UserID:     data.UserID,
+		Status:     data.Status,
+		PricePaise: data.PricePaise,
+		Currency:   data.Currency,
 	}, nil
 }
 
@@ -122,11 +126,13 @@ func (s *RedisStore) Confirm(ctx context.Context, sessionID string, userID strin
 
 	session.Status = "confirmed"
 	data := Booking{
-		ID:      session.ID,
-		MovieID: string(session.MovieID),
-		SeatID:  session.SeatID,
-		UserID:  session.UserID,
-		Status:  "confirmed",
+		ID:         session.ID,
+		MovieID:    string(session.MovieID),
+		SeatID:     session.SeatID,
+		UserID:     session.UserID,
+		Status:     "confirmed",
+		PricePaise: session.PricePaise,
+		Currency:   session.Currency,
 	}
 	val, _ := json.Marshal(data)
 	s.rdb.Set(ctx, sk, val, 0)

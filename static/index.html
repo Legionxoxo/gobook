@@ -507,6 +507,8 @@
                 sessionID: data.session_id,
                 movieID: data.movie_id,
                 seatID: data.seat_id,
+                pricePaise: data.price_paise,
+                currency: data.currency,
                 expiresAt: new Date(data.expires_at),
               };
               fetchSeats();
@@ -563,6 +565,9 @@
             "</div>" +
             '<div class="checkout-info"><span>Movie:</span> ' +
             escapeHtml(activeSession.movieID) +
+            "</div>" +
+            '<div class="checkout-info"><span>Price:</span> ' +
+            escapeHtml(formatPrice(activeSession.pricePaise, activeSession.currency)) +
             "</div>" +
             '<div class="checkout-info"><span>Session:</span> ' +
             activeSession.sessionID.slice(0, 8) +
@@ -655,6 +660,13 @@
           var div = document.createElement("div");
           div.textContent = str;
           return div.innerHTML;
+        }
+
+        function formatPrice(pricePaise, currency) {
+          return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: currency,
+          }).format(pricePaise / 100);
         }
 
         // --- Init ---

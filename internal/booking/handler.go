@@ -1,6 +1,7 @@
 package booking
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -10,11 +11,12 @@ import (
 )
 
 type handler struct {
-	svc *Service
+	svc    *Service
+	pricer PriceQuoter
 }
 
-func NewHandler(svc *Service) *handler {
-	return &handler{svc}
+func NewHandler(svc *Service, pricer PriceQuoter) *handler {
+	return &handler{svc: svc, pricer: pricer}
 }
 
 type holdSeatRequest struct {
@@ -31,10 +33,24 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
+	defer cancel()
+
+	quote, err := h.pricer.GetQuote(ctx, movieID, seatID)
+	if err != nil {
+		log.Printf("get price quote: %v", err)
+		utils.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error": "pricing service unavailable",
+		})
+		return
+	}
+
 	data := Booking{
-		UserID:  req.UserID,
-		SeatID:  seatID,
-		MovieID: movieID,
+		UserID:     req.UserID,
+		SeatID:     seatID,
+		MovieID:    movieID,
+		PricePaise: quote.PricePaise,
+		Currency:   quote.Currency,
 	}
 
 	session, err := h.svc.Book(data)
@@ -44,17 +60,21 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type holdResponse struct {
-		SessionID string `json:"session_id"`
-		MovieID   string `json:"movieID"`
-		SeatID    string `json:"seat_id"`
-		ExpiresAt string `json:"expires_at"`
+		SessionID  string `json:"session_id"`
+		MovieID    string `json:"movie_id"`
+		SeatID     string `json:"seat_id"`
+		PricePaise int64  `json:"price_paise"`
+		Currency   string `json:"currency"`
+		ExpiresAt  string `json:"expires_at"`
 	}
 
 	utils.WriteJSON(w, http.StatusCreated, holdResponse{
-		SeatID:    seatID,
-		MovieID:   session.MovieID,
-		SessionID: session.ID,
-		ExpiresAt: session.ExpiresAt.Format(time.RFC3339),
+		SeatID:     seatID,
+		MovieID:    session.MovieID,
+		SessionID:  session.ID,
+		PricePaise: session.PricePaise,
+		Currency:   session.Currency,
+		ExpiresAt:  session.ExpiresAt.Format(time.RFC3339),
 	})
 }
 
