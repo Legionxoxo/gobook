@@ -8,7 +8,6 @@
       :root {
         --bg: #0f0f0f;
         --surface: #1a1a1a;
-        --surface-hover: #252525;
         --border: #333;
         --text: #e0e0e0;
         --text-muted: #888;
@@ -255,12 +254,6 @@
         color: var(--danger);
       }
 
-      .empty-state {
-        text-align: center;
-        color: var(--text-muted);
-        font-size: 0.85rem;
-        padding: 3rem 1rem;
-      }
     </style>
   </head>
   <body>
@@ -316,7 +309,6 @@
         // This demo intentionally has one showing so the UI can focus on booking flow.
         const movie = { id: "inception", title: "Inception", rows: 5, seatsPerRow: 8 };
         let activeSession = null; // { sessionID, movieID, seatID, expiresAt }
-        let pollInterval = null;
         let timerInterval = null;
 
         // --- API helpers ---
@@ -552,13 +544,6 @@
           }
         }
 
-        // --- Polling ---
-
-        function startPolling() {
-          if (pollInterval) clearInterval(pollInterval);
-          pollInterval = setInterval(fetchSeats, 2000);
-        }
-
         // --- Util ---
 
         function escapeHtml(str) {
@@ -577,7 +562,6 @@
         // --- Init ---
 
         fetchSeats();
-        startPolling();
       })();
     </script>
   </body>

@@ -1,6 +1,6 @@
 # GoBook
 
-A single-showing cinema seat-booking application built with Go, Redis, REST, and gRPC.
+A deliberately small, single-showing cinema seat-booking application built with Go, Redis, REST, and gRPC.
 
 ## Architecture
 
@@ -15,15 +15,24 @@ Booking API -------- gRPC :9090 --------> Pricing service
 Redis                                  Fixed normal-seat price: INR 200.00
 ```
 
-The browser uses REST because it works naturally with HTTP and JSON. Before holding a seat, the booking API makes a synchronous unary gRPC call to the internal pricing service. The returned quote is stored with the Redis booking and included in the REST response.
+The browser shows one fixed Inception screening. It uses REST because browsers work naturally with HTTP and JSON. Before holding a seat, the Booking API makes a synchronous unary gRPC call to Pricing. The returned quote is saved with the Redis reservation and returned to the browser.
 
-The interface is intentionally limited to one Inception showing, so it focuses on seat holds,
-confirmation, expiry, and the internal gRPC pricing call. All seats currently use one mocked
-normal-seat price; there are no seat types or dynamic pricing rules.
+The UI refreshes seat data after a hold, confirmation, release, or expiry; it does not poll. All seats use one mocked normal-seat price, so there are no seat types or dynamic pricing rules.
+
+## REST API
+
+```text
+GET    /movies/inception/seats
+POST   /movies/inception/seats/{seatID}/hold
+PUT    /sessions/{sessionID}/confirm
+DELETE /sessions/{sessionID}
+```
+
+The hold, confirm, and release routes expect JSON with a `user_id` field.
 
 ## Run with Docker
 
-Start the complete containerized application:
+Build and start the complete application:
 
 ```bash
 docker compose up --build
@@ -31,9 +40,7 @@ docker compose up --build
 
 Then open `http://localhost:8080`. Redis Commander is available at `http://localhost:8081`.
 
-The booking container connects to Redis and pricing through the Compose network using
-`redis:6379` and `pricing:9090`; those addresses are provided by `REDIS_ADDR` and
-`PRICING_ADDR` environment variables.
+The Booking container connects to Redis and Pricing through the Compose network using `redis:6379` and `pricing:9090`. Those addresses are supplied through `REDIS_ADDR` and `PRICING_ADDR` environment variables.
 
 ## Run locally
 
@@ -69,16 +76,28 @@ The contract lives in `api/pricing/v1/pricing.proto`. Generated Go client and se
 
 Money is represented as integer paise rather than floating point. For example, INR 200.00 is stored as `20000` paise.
 
+## Project structure
+
+```text
+cmd/main.go                    Booking REST API entry point
+cmd/pricing/main.go            Pricing gRPC service entry point
+internal/booking/              HTTP handlers and Redis reservation store
+internal/adapters/pricing/     gRPC client adapter used by Booking
+internal/pricing/              Pricing gRPC implementation
+api/pricing/v1/                Protobuf contract
+gen/pricing/v1/                Generated protobuf and gRPC Go code
+static/index.html              Single-showing browser UI
+```
+
 ## Interview explanation
 
-REST is the external API for the browser. gRPC is used for the synchronous internal call from booking to pricing because it provides a strongly typed protobuf contract and generated Go clients. Pricing is kept behind a separate boundary because the same rules could later be shared by web, mobile, and kiosk booking channels.
+REST is the external API for the browser. gRPC is used for the synchronous internal call from Booking to Pricing because it provides a strongly typed protobuf contract and generated Go clients. Redis uses an atomic `SET NX` operation with a two-minute TTL, so only one user can hold a seat and abandoned holds expire automatically.
 
 The RPC is unary because requesting a price is a single request-response operation; streaming would add complexity without helping this use case.
 
 ## Test
 
-The project has one Redis-backed stress test. It starts 100,000 concurrent attempts to
-hold the same seat and verifies that Redis `SET NX` permits exactly one winner.
+The project has one Redis-backed stress test in `internal/booking/redis_store_test.go`. It starts 100,000 concurrent attempts to hold the same seat and verifies that Redis `SET NX` permits exactly one winner.
 
 Start the Docker stack first, then run:
 

@@ -6,17 +6,15 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/Legionxoxo/gobook/internal/utils"
 )
 
 type handler struct {
-	svc    *Service
+	store  *RedisStore
 	pricer PriceQuoter
 }
 
-func NewHandler(svc *Service, pricer PriceQuoter) *handler {
-	return &handler{svc: svc, pricer: pricer}
+func NewHandler(store *RedisStore, pricer PriceQuoter) *handler {
+	return &handler{store: store, pricer: pricer}
 }
 
 type holdSeatRequest struct {
@@ -41,7 +39,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 	quote, err := h.pricer.GetQuote(ctx, movieID, seatID)
 	if err != nil {
 		log.Printf("get price quote: %v", err)
-		utils.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error": "pricing service unavailable",
 		})
 		return
@@ -56,7 +54,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 		Currency:   quote.Currency,
 	}
 
-	session, err := h.svc.Book(data)
+	session, err := h.store.Book(data)
 	if err != nil {
 		log.Println(err)
 		return
@@ -71,7 +69,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 		ExpiresAt  string `json:"expires_at"`
 	}
 
-	utils.WriteJSON(w, http.StatusCreated, holdResponse{
+	writeJSON(w, http.StatusCreated, holdResponse{
 		SeatID:     seatID,
 		MovieID:    session.MovieID,
 		SessionID:  session.ID,
@@ -85,7 +83,7 @@ func (h *handler) ListSeats(w http.ResponseWriter, r *http.Request) {
 	// Convert stored reservations into the lightweight seat-map response for the UI.
 	movieID := r.PathValue("movieID")
 
-	bookings := h.svc.ListBookings(movieID)
+	bookings := h.store.ListBookings(movieID)
 
 	seats := make([]seatInfo, 0, len(bookings))
 	for _, b := range bookings {
@@ -97,7 +95,7 @@ func (h *handler) ListSeats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	utils.WriteJSON(w, http.StatusOK, seats)
+	writeJSON(w, http.StatusOK, seats)
 }
 
 type seatInfo struct {
@@ -120,12 +118,12 @@ func (h *handler) ConfirmSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := h.svc.ConfirmSeat(r.Context(), sessionID, req.UserID)
+	session, err := h.store.Confirm(r.Context(), sessionID, req.UserID)
 	if err != nil {
 		return
 	}
 
-	utils.WriteJSON(w, http.StatusOK, sessionResponse{
+	writeJSON(w, http.StatusOK, sessionResponse{
 		SessionID: session.ID,
 		MovieID:   session.MovieID,
 		SeatID:    session.SeatID,
@@ -156,11 +154,18 @@ func (h *handler) ReleaseSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := h.svc.ReleaseSeat(r.Context(), sessionID, req.UserID)
+	err := h.store.Release(r.Context(), sessionID, req.UserID)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// writeJSON keeps response headers and JSON encoding consistent for booking routes.
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(v)
 }

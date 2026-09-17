@@ -8,13 +8,12 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/Legionxoxo/gobook/internal/adapters/redis"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 func TestConcurrentBooking_ExactlyOneWins(t *testing.T) {
-	store := NewRedisStore(redis.NewClient("localhost:6379"))
-	svc := NewService(store)
+	store := NewRedisStore(redis.NewClient(&redis.Options{Addr: "localhost:6379"}))
 
 	const numGoroutines = 100_000 // 100k users trying to book a seat at the same time
 	movieID := "concurrency-" + uuid.NewString()
@@ -32,7 +31,7 @@ func TestConcurrentBooking_ExactlyOneWins(t *testing.T) {
 	for i := range numGoroutines {
 		go func(userNum int) {
 			defer wg.Done()
-			booking, err := svc.Book(Booking{
+			booking, err := store.Book(Booking{
 				MovieID: movieID,
 				SeatID:  seatID,
 				UserID:  fmt.Sprintf("user-%d", userNum),

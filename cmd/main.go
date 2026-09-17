@@ -1,14 +1,15 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
 	pricingv1 "github.com/Legionxoxo/gobook/gen/pricing/v1"
 	pricingadapter "github.com/Legionxoxo/gobook/internal/adapters/pricing"
-	"github.com/Legionxoxo/gobook/internal/adapters/redis"
 	"github.com/Legionxoxo/gobook/internal/booking"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -21,8 +22,11 @@ func main() {
 
 	// --- Infrastructure dependencies ---
 	// Docker supplies service names; local development uses the localhost defaults.
-	store := booking.NewRedisStore(redis.NewClient(envOrDefault("REDIS_ADDR", "localhost:6379")))
-	svc := booking.NewService(store)
+	redisClient := redis.NewClient(&redis.Options{Addr: envOrDefault("REDIS_ADDR", "localhost:6379")})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("redis ping: %v", err)
+	}
+	store := booking.NewRedisStore(redisClient)
 	pricingConn, err := grpc.NewClient(envOrDefault("PRICING_ADDR", "localhost:9090"), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatal(err)
@@ -31,7 +35,7 @@ func main() {
 
 	// The adapter keeps generated gRPC/protobuf types out of the booking package.
 	priceClient := pricingadapter.NewClient(pricingv1.NewPricingServiceClient(pricingConn))
-	bookingHandler := booking.NewHandler(svc, priceClient)
+	bookingHandler := booking.NewHandler(store, priceClient)
 
 	mux.HandleFunc("GET /movies/{movieID}/seats", bookingHandler.ListSeats)
 	mux.HandleFunc("POST /movies/{movieID}/seats/{seatID}/hold", bookingHandler.HoldSeat)
