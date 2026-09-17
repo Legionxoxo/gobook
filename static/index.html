@@ -59,45 +59,6 @@
         border-radius: 4px;
       }
 
-      .movies {
-        display: flex;
-        gap: 1rem;
-        margin-bottom: 2rem;
-        flex-wrap: wrap;
-      }
-
-      .movie-card {
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1.2rem 1.6rem;
-        cursor: pointer;
-        transition:
-          border-color 0.2s,
-          background 0.2s;
-        min-width: 180px;
-      }
-
-      .movie-card:hover {
-        background: var(--surface-hover);
-        border-color: var(--accent);
-      }
-
-      .movie-card.selected {
-        border-color: var(--accent);
-        background: var(--surface-hover);
-      }
-
-      .movie-card h3 {
-        font-size: 1rem;
-        margin-bottom: 0.4rem;
-      }
-
-      .movie-card p {
-        font-size: 0.75rem;
-        color: var(--text-muted);
-      }
-
       .content {
         display: flex;
         gap: 2rem;
@@ -308,9 +269,7 @@
       <div class="user-id" id="userBadge"></div>
     </header>
 
-    <div class="movies" id="movieList"></div>
-
-    <div class="content" id="mainContent" style="display: none">
+    <div class="content">
       <div class="screen-area">
         <div class="screen-label">Screen</div>
         <div class="screen-bar"></div>
@@ -354,8 +313,8 @@
         const userID = crypto.randomUUID().replace(/-/g, "").slice(0, 12);
         document.getElementById("userBadge").textContent = "user: " + userID;
 
-        let movies = [];
-        let selectedMovie = null;
+        // This demo intentionally has one showing so the UI can focus on booking flow.
+        const movie = { id: "inception", title: "Inception", rows: 5, seatsPerRow: 8 };
         let activeSession = null; // { sessionID, movieID, seatID, expiresAt }
         let pollInterval = null;
         let timerInterval = null;
@@ -377,64 +336,10 @@
           });
         }
 
-        // --- Movie list ---
-
-        function loadMovies() {
-          api("GET", "/movies").then(function (data) {
-            movies = data;
-            renderMovies();
-          });
-        }
-
-        function renderMovies() {
-          var container = document.getElementById("movieList");
-          container.innerHTML = "";
-          movies.forEach(function (m) {
-            var card = document.createElement("div");
-            card.className =
-              "movie-card" +
-              (selectedMovie && selectedMovie.id === m.id ? " selected" : "");
-            card.innerHTML =
-              "<h3>" +
-              escapeHtml(m.title) +
-              "</h3><p>" +
-              m.rows +
-              " rows &times; " +
-              m.seats_per_row +
-              " seats</p>";
-            card.addEventListener("click", function () {
-              selectMovie(m);
-            });
-            container.appendChild(card);
-          });
-        }
-
-        function releaseActiveSession() {
-          if (!activeSession) return Promise.resolve();
-          var sid = activeSession.sessionID;
-          clearTimerInterval();
-          activeSession = null;
-          document.getElementById("checkoutArea").innerHTML = "";
-          return api("DELETE", "/sessions/" + sid, { user_id: userID }).catch(
-            function () {},
-          );
-        }
-
-        function selectMovie(movie) {
-          releaseActiveSession();
-          selectedMovie = movie;
-          renderMovies();
-          document.getElementById("mainContent").style.display = "flex";
-          document.getElementById("checkoutArea").innerHTML = "";
-          fetchSeats();
-          startPolling();
-        }
-
         // --- Seat grid ---
 
         function fetchSeats() {
-          if (!selectedMovie) return;
-          api("GET", "/movies/" + selectedMovie.id + "/seats").then(
+          api("GET", "/movies/" + movie.id + "/seats").then(
             function (seats) {
               renderGrid(seats);
             },
@@ -450,7 +355,7 @@
           });
 
           var rowLabels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-          for (var r = 0; r < selectedMovie.rows; r++) {
+          for (var r = 0; r < movie.rows; r++) {
             var rowDiv = document.createElement("div");
             rowDiv.className = "seat-row";
             var label = document.createElement("div");
@@ -458,7 +363,7 @@
             label.textContent = rowLabels[r];
             rowDiv.appendChild(label);
 
-            for (var s = 1; s <= selectedMovie.seats_per_row; s++) {
+            for (var s = 1; s <= movie.seatsPerRow; s++) {
               var seatID = rowLabels[r] + s;
               var btn = document.createElement("button");
               btn.className = "seat";
@@ -499,7 +404,7 @@
           if (activeSession) return; // already holding a seat
           api(
             "POST",
-            "/movies/" + selectedMovie.id + "/seats/" + seatID + "/hold",
+            "/movies/" + movie.id + "/seats/" + seatID + "/hold",
             { user_id: userID },
           )
             .then(function (data) {
@@ -671,7 +576,8 @@
 
         // --- Init ---
 
-        loadMovies();
+        fetchSeats();
+        startPolling();
       })();
     </script>
   </body>

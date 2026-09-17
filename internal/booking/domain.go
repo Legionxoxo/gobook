@@ -10,7 +10,8 @@ var (
 	ErrSeatAlreadyBooked = errors.New("seat is already taken")
 )
 
-// Booking represents a confirmed seat reservation.
+// Booking represents one seat reservation. Its status is "held" until payment
+// succeeds, then it becomes "confirmed" and no longer expires.
 type Booking struct {
 	ID         string
 	MovieID    string
@@ -23,6 +24,7 @@ type Booking struct {
 }
 
 type BookingStore interface {
+	// BookingStore lets the service use Redis in production and a fake store in tests.
 	Book(b Booking) (Booking, error)
 	ListBookings(movieID string) []Booking
 

@@ -8,6 +8,7 @@ import (
 )
 
 func NewClient(addr string) *goredis.Client {
+	// Fail at startup rather than accepting requests with an unavailable database.
 	rdb := goredis.NewClient(&goredis.Options{Addr: addr})
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
 		log.Fatalf("redis ping: %v", err)

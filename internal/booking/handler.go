@@ -24,6 +24,7 @@ type holdSeatRequest struct {
 }
 
 func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
+	// --- Hold flow: REST request -> gRPC quote -> Redis reservation ---
 	movieID := r.PathValue("movieID")
 	seatID := r.PathValue("seatID")
 
@@ -33,6 +34,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Do not let a slow pricing service block the booking request indefinitely.
 	ctx, cancel := context.WithTimeout(r.Context(), time.Second)
 	defer cancel()
 
@@ -45,6 +47,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Store the accepted quote with the reservation so the checkout price is fixed.
 	data := Booking{
 		UserID:     req.UserID,
 		SeatID:     seatID,
@@ -79,6 +82,7 @@ func (h *handler) HoldSeat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) ListSeats(w http.ResponseWriter, r *http.Request) {
+	// Convert stored reservations into the lightweight seat-map response for the UI.
 	movieID := r.PathValue("movieID")
 
 	bookings := h.svc.ListBookings(movieID)
@@ -104,6 +108,7 @@ type seatInfo struct {
 }
 
 func (h *handler) ConfirmSession(w http.ResponseWriter, r *http.Request) {
+	// Confirmation removes the Redis expiry and turns the hold into a booking.
 	sessionID := r.PathValue("sessionID")
 
 	var req holdSeatRequest
@@ -139,6 +144,7 @@ type sessionResponse struct {
 }
 
 func (h *handler) ReleaseSession(w http.ResponseWriter, r *http.Request) {
+	// A user can explicitly free a seat instead of waiting for the hold TTL.
 	sessionID := r.PathValue("sessionID")
 
 	var req holdSeatRequest

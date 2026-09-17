@@ -10,11 +10,13 @@ import (
 )
 
 func main() {
+	// --- Start the internal pricing gRPC service ---
 	listener, err := net.Listen("tcp", ":9090")
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Register the handwritten pricing implementation against the generated contract.
 	server := grpc.NewServer()
 	pricingv1.RegisterPricingServiceServer(server, pricing.NewServer())
 

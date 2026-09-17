@@ -33,6 +33,7 @@ func sessionKey(id string) string {
 }
 
 func (s *RedisStore) Book(b Booking) (Booking, error) {
+	// Keep the public store operation small; hold performs the atomic Redis write.
 	session, err := s.hold(b)
 	if err != nil {
 		return Booking{}, err
@@ -44,6 +45,7 @@ func (s *RedisStore) Book(b Booking) (Booking, error) {
 }
 
 func (s *RedisStore) ListBookings(movieID string) []Booking {
+	// Scan only this movie's seat keys so the UI can render its seat map.
 	pattern := fmt.Sprintf("seat:%s:*", movieID)
 	var sessions []Booking
 
@@ -66,6 +68,7 @@ func (s *RedisStore) ListBookings(movieID string) []Booking {
 }
 
 func (s *RedisStore) hold(b Booking) (Booking, error) {
+	// A UUID lets the client later confirm or release this specific hold.
 	id := uuid.New().String()
 	now := time.Now()
 	ctx := context.Background()
@@ -74,6 +77,7 @@ func (s *RedisStore) hold(b Booking) (Booking, error) {
 	b.ID = id
 	val, _ := json.Marshal(b)
 
+	// NX is the concurrency guarantee: only the first request can claim a seat.
 	res := s.rdb.SetArgs(ctx, key, val, redis.SetArgs{
 		Mode: "NX", // set if not exists
 		TTL:  defaultHoldTTL,
@@ -83,6 +87,7 @@ func (s *RedisStore) hold(b Booking) (Booking, error) {
 		return Booking{}, ErrSeatAlreadyBooked
 	}
 
+	// Store the reverse mapping so confirm/release can find the seat key by session ID.
 	s.rdb.Set(ctx, sessionKey(id), key, defaultHoldTTL)
 
 	return Booking{
@@ -98,6 +103,7 @@ func (s *RedisStore) hold(b Booking) (Booking, error) {
 }
 
 func parseSession(val string) (Booking, error) {
+	// Redis stores JSON, while the rest of the application uses Booking values.
 	var data Booking
 	if err := json.Unmarshal([]byte(val), &data); err != nil {
 		return Booking{}, err
@@ -141,6 +147,7 @@ func (s *RedisStore) Confirm(ctx context.Context, sessionID string, userID strin
 }
 
 func (s *RedisStore) getSession(ctx context.Context, sessionID string, userID string) (Booking, string, error) {
+	// Resolve session ID -> seat key -> seat reservation.
 	sk, err := s.rdb.Get(ctx, sessionKey(sessionID)).Result()
 	if err != nil {
 		return Booking{}, "", err
@@ -160,6 +167,7 @@ func (s *RedisStore) getSession(ctx context.Context, sessionID string, userID st
 }
 
 func (s *RedisStore) Release(ctx context.Context, sessionID string, userID string) error {
+	// Delete both sides of the lookup so another customer can hold the seat.
 	_, sk, err := s.getSession(ctx, sessionID, userID)
 	if err != nil {
 		return err
